@@ -1,0 +1,114 @@
+<!doctype html>
+<html>
+  <head>
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+    <style>
+      div.bouncingball {
+        border: 1px solid black;
+        position: absolute;
+        text-align: center;
+        /*background-color: black; */
+        box-shadow: 3px 3px 2px #888888;
+      }
+    </style>
+    <script>
+      var balls = [];
+      var divOnMouseOver = function (t) {
+        t.style.borderColor = 'red';
+        var found = -1;
+        for(var j in balls)
+          if(balls[j].ball === t) {
+            found = j;
+            break;
+          }
+        if(found >= 0)
+        {
+          //$(t).slideUp('slow');
+          balls.splice(found,1);
+        }
+
+        document.body.removeChild(t);
+        t = null;
+        console.log(balls.length);
+      }
+      var divOnMouseOut = function (t) {
+        //t.style.borderColor = t.style.backgroundColor;
+      }
+      function randomColor() {
+        var r = Math.floor(Math.random()*256);
+        var g = Math.floor(Math.random()*256);
+        var b = Math.floor(Math.random()*256);
+        return 'rgb('+r+','+g+','+b+')';
+      }
+      function randomRadius(maxRadius, minRadius) {
+        if(arguments.length == 0)
+          maxRadius = 100;
+        if(arguments.legnth ==1)
+          return Math.floor(Math.random()*maxRadius);
+        else
+          return Math.floor(Math.random()*maxRadius)+minRadius;
+
+      }
+      function Ball() {
+        this.radius = randomRadius(150,16);
+        this.vLeft = Math.floor(Math.random()*window.innerWidth);
+        this.vTop = Math.floor(Math.random()*window.innerHeight); 
+        if(this.vLeft < 0)
+          this.vLeft = 0;
+        if((this.vLeft+this.radius) >= window.innerWidth)
+          this.vLeft = window.innerWidth - (2*this.radius);
+        if(this.vTop < 0)
+          this.vTop = 0;
+        if((this.vTop+this.radius) >= window.innerHeight)
+          this.vTop = window.innerHeight - (2*this.radius);
+
+
+        this.moveX = Math.floor(Math.random()*10)-5;
+        this.moveY = Math.floor(Math.random()*10)-5;
+        this.ball = document.createElement('div');
+        this.ball.setAttribute('class', 'bouncingball');
+        this.ball.setAttribute('onmouseover','divOnMouseOver(this)');
+        //this.ball.setAttribute('onmouseup','divOnMouseOut(this)');
+        this.ball.style.left = this.vLeft + 'px';
+        this.ball.style.top = this.vTop + 'px';
+        this.ball.style.backgroundColor = randomColor();
+        this.ball.style.borderColor = this.ball.style.backgroundColor;
+        this.ball.style.width = this.radius + 'px'
+        this.ball.style.height = this.radius + 'px'
+        this.ball.style.borderRadius = Math.floor(this.radius/2)+'px';
+        document.body.appendChild(this.ball);
+        
+        this.move = function () {
+          this.vLeft += this.moveX;
+          this.vTop += this.moveY;
+          this.ball.style.left = this.vLeft + 'px';
+          this.ball.style.top = this.vTop + 'px';   
+        };
+        
+        this.checkBoundary = function() {
+          if(this.vLeft <= 0 || (this.vLeft+this.radius) >= window.innerWidth)
+            this.moveX *= -1;
+          if(this.vTop <= 0 || (this.vTop+this.radius) >= window.innerHeight)
+            this.moveY *= -1;
+        };
+      }
+
+      function moveBalls() {
+        for(var i in balls) {
+          balls[i].move();
+          balls[i].checkBoundary();
+        }
+      }
+      window.onload = function() {
+          //document.write('window.innerWidth='+window.innerWidth+'<br>');
+          //document.write('window.innerHeight='+window.innerHeight);
+          for(var i=1; i<=100; i++) {
+                balls.push(new Ball());
+          }
+          setInterval(moveBalls,40);
+      }      
+    </script>
+  </head>
+  <body>
+  </body>
+</html>

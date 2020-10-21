@@ -1,0 +1,151 @@
+<!doctype html>
+<html>
+<!--
+- bounding ball의 크기를 짝수로만 설정하도록 함. (찌그러진 공 방지)
+- time stamp 기능 추가
+- start button 추가 
+- 게임 계속 가능 
+- copyright 정보 추가 및 resize 대응.
+- balls resize 대응
+- Ball methods are moved to prototype
+- 차례대로 지정되는 볼을 하나씩 없애야 한다.
+- 선택 볼이 잘 보일 수 있도록 볼의 칼라 범위를 조절함. (선택 테두리가 잘 보이도록 함.)
+- 1.5초 내에 없애지 못하면 선택할 볼이 변경됨.
+- 없애는 볼의 배경색이 화면의 배경색으로 설정됨. (볼의 제거도 확인하면서 게임의 흥미를 높임 ) 
+- 볼 제거 과정(볼 제거 간의 시간, 놓친 볼의 횟수 등)을 기록 
+- 볼 개수를 최대~최소 범위에서 입력할 수 있게 함. (범위를 넘어서면 강제로 조정하는 기능 )
+- 볼 제거 시, fadeOut 효과 적용 (ballsKilled 배열 활용)
+- pause, resume easter egg 추가.
+- 1/1000 -> 1/100 
+- 놓친 볼들의 순서가 다시 재생되지 않도록 함.
+- 윈도우 경계에서의 반사 정밀도 개선. (Ball.checkBoundary() 를 삭제하고 Balls.move()로 통합.)
+- ballCount 역진 방지 기능. (최근에 한 개수보다 같거나 많게만 설정가능.)
+- 게임 중 ball 추가 easter egg 추가. (역진 방지 유지)
+- 게임 종료 후, game report 표시.
+- 게임 시작~종료 기간 배경음악 추가 . (Sound library  Howler.min.js   음악: Lake Louise, 유키쿠라모토)
+- 볼 제거 효과음 추가(spcvactub), 게임종료 시 효과음(gong) 배경음악 변경 (배경음악: PurpleRain)
+-->
+  <head>
+      <!-- ============================= --> 
+    <style>
+      div.bouncingball {
+        border: 1px solid black;
+        position: absolute;
+        text-align: center;
+        box-shadow: 3px 3px 2px #888888;
+        z-index: 1;
+      }
+      div.button {
+        width: 150px;
+        height: 40px;
+        border: 2px solid gray;
+        position: center;
+        background-color: yellow;
+      }
+      button.control {
+        width: 120px;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 12pt;
+      }
+      div.copyright {
+        position: absolute;
+        text-align: right;
+        font-size: 9pt;
+        color: #999999;
+        height: 16px;
+        z-index: 2;
+      }
+      div.gameresult {
+        position: absolute;
+        left: 100px;
+        top: 100px;
+        width: 500px;
+        border: 1px solid gray;
+        box-shadow: 3px 3px 3px #555555;
+        border-radius: 10px;
+        font-size: 12pt;
+      }
+      .coltitle {
+        text-align: right;
+        width: 170px;
+        font-size: 15pt;
+      }
+      .colvalue {
+        text-align: left;
+        padding-left: 5px;
+        font-size: 15pt;
+      }
+    </style>
+    <!-- ============================= --> 
+
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+    <!-- ============================= --> 
+    <!-- ======[ audio library ]====== --> 
+    <script src="howler.min.js"></script>
+    <script src="default.js"></script>
+  </head>
+  <body onresize="reAlignCopyright();">
+      <!-- ====================================================================================================== -->
+      <table style="width:100%;"> <tr>
+      <td style="width: 160px; text-align: left;"><button id="control" style="font-size:12pt;" onclick='startGame();'>Start</button> <span id='control2'>with 
+          <input oninput='correctBallsInput();' type='text' id='ballcount' style="font-size: 12pt; text-align: right;" size='3'></span></td>
+      <td style="width:120px;"><span onclick="addBall();">Balls</span>: <b><span style="width:180px; color: blue;" id=ballsleft></span></b> </td>
+      <td style="width:140px;">Start:<b><span id=timestart onclick = "resumeGame();"></span></b></td>
+      <td style="width:140px;"> Finish:<b><span id=timefinish onclick="pauseGame();"></span></b></td>
+      <td> 
+            <button id='togglePenalty' class='control' onclick='controlAddBall();'>Penalty ON</button>
+            <button id='toggleBGM' class='control' onclick='controlBGM();'>BGM ON</button>
+      </td>
+      <td style="text-align:right;">Your speed:<b><span id='timeinterval' style="color: red; font-size: 12pt;">?</span></b> seconds.</td>
+      </tr></table>
+
+      <!-- ====================================================================================================== -->
+      <div id='copyright' class='copyright'>Copyright (c) 2016 by Pongsik, Ho.  컴퓨터정보과, 동의과학대학교  </div>
+      <!-- ====================================================================================================== -->
+      <div class='gameresult' id='gameresult' style="text-align: center; width: 500px; background-color: MistyRose;">
+          <table width=100%>
+            <tr><td style="border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: gray;">
+                <h1 style="color: MediumVioletRed; font-family: 'Arial'; font-style: 'bold'; text-shadow: 2px 2px 2px #AAAAAA; margin-bottom: 0px;" >Game Report</h1>
+                <p style="font-family: Arial; font-size:7pt;"> version: [bouncing_t].2016.10.15.</p>
+            </td></tr>
+            <tr><td style="background-color: LemonChiffon;">
+                <table id='gamereport' style="width:100%; border-style: solid; border-color: #AAAAAA; border-width: 0px; position: relative; margin: 5%;">
+                  <tr>
+                    <td class=coltitle># of game balls:</td>
+                    <td class=colvalue><b><span  style='color: black;' id='numberofballs'>35</span></b></td>
+                  </tr>
+                  <tr>
+                    <td class=coltitle># of missed balls:</td>
+                    <td class=colvalue><b><span style='color:red;' id='missedballs'>1:00.00</span></b></td>
+                  </tr>
+                  <tr>
+                    <td class=coltitle>Window size:</td>
+                    <td class=colvalue><span id='windowsize'>35</span></td>
+                  </tr>
+                  <tr>
+                    <td class=coltitle>Total game time:</td>
+                    <td class=colvalue><b><span id='timetotal'>1:00.00</span></b> secs.</td>
+                  </tr>
+                  <tr>
+                    <td class=coltitle>Average interval:</td>
+                    <td class=colvalue><b><span style='color:blue;' id='timeavr'>1:00.00</span></b> secs.</td>
+                  </tr>
+                  <tr>
+                    <td class=coltitle>Maximum interval:</td>
+                    <td class=colvalue><b><span style='color: red;' id='timemax'>1:00.00</span></b> secs.</td>
+                  </tr>
+                  <tr>
+                    <td class=coltitle>Mininum interval:</td>
+                    <td class=colvalue><b><span  style='color: blue;' id='timemin'>1:00.00</span></b> secs.</td>
+                  </tr>
+                </table>
+                <span id='reportfinishtime' style='font-size: 9pt;'>2016.10.15.</span>
+            </td></tr>
+            <tr><td style="border-top-style: solid; border-top-width: 2px; border-top-color: gray;">
+                <p>Copyright (c) 2016 by Pongsik, Ho.  DIT</p>
+            </td></tr>
+          </table>
+      </div>
+      <!-- ====================================================================================================== -->
+  </body>
+</html>

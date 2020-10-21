@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+<!--
+- bounding ball의 크기를 짝수로만 설정하도록 함. (찌그러진 공 방지)
+- time stamp 기능 추가
+- start button 추가 
+- 게임 계속 가능 
+- copyright 정보 추가 및 resize 대응.
+- balls resize 대응
+- Ball methods are moved to prototype
+- 차례대로 지정되는 볼을 하나씩 없애야 한다.
+- 선택 볼이 잘 보일 수 있도록 볼의 칼라 범위를 조절함. (선택 테두리가 잘 보이도록 함.)
+- 1.5초 내에 없애지 못하면 선택할 볼이 변경됨.
+- 없애는 볼의 배경색이 화면의 배경색으로 설정됨. (볼의 제거도 확인하면서 게임의 흥미를 높임 ) 
+- 볼 제거 과정(볼 제거 간의 시간, 놓친 볼의 횟수 등)을 기록 
+-->
+  <head>
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+    <style>
+      div.bouncingball {
+        border: 1px solid black;
+        position: absolute;
+        text-align: center;
+        /*background-color: black; */
+        box-shadow: 3px 3px 2px #888888;
+        z-index: 1;
+      }
+      div.button {
+        width: 150px;
+        height: 40px;
+        border: 2px solid gray;
+        position: center;
+        background-color: yellow;
+      }
+      div.copyright {
+        position: absolute;
+        text-align: right;
+        font-size: 9pt;
+        color: #999999;
+        height: 16px;
+        z-index: 2;
+      }
+    </style>
+    <script>
+ var balls=[],intervals=[],missed=[],missedBalls=0,timeStarted,timeFinished,timeInterval,timeChecked,timer,divOnMouseOver=function(a){var b=-1,c,d;for(d in balls)if(balls[d].ball===a){b=d;c=new Date;break}if(0<=b&&balls[b].selected)if(intervals.push(c-timeChecked),document.body.style.backgroundColor=balls[b].ball.style.backgroundColor,balls.splice(b,1),timeChecked=new Date,missed.push(missedBalls),missedBalls=0,document.body.removeChild(a),document.getElementById("ballsleft").innerHTML=balls.length,
+0>=balls.length){document.getElementById("timefinish").innerHTML=getTimeStamp(2);document.getElementById("timeinterval").innerHTML=getTimeStamp(3);clearInterval(timer);document.body.style.backgroundColor="white";for(var e in intervals)console.log("["+addZero(e)+"]:"+intervals[e]+" (missed "+missed[e]+")")}else balls[0].myTurn(),Ball.currentTurn=0},divOnMouseOut=function(a){};
+function randomColor(){return"rgb("+(Math.floor(76*Math.random())+175)+","+(Math.floor(76*Math.random())+175)+","+(Math.floor(76*Math.random())+175)+")"}function randomRadius(a,b){0==arguments.length&&(a=100);var c=1==arguments.legnth?Math.floor(Math.random()*a):Math.floor(Math.random()*a)+b;return 0<c%2?c+1:c}
+function Ball(){this.selected=!1;this.selectedTime=new Date;this.radius=randomRadius(150,16);this.vLeft=Math.floor(Math.random()*window.innerWidth);this.vTop=Math.floor(Math.random()*window.innerHeight);0>this.vLeft&&(this.vLeft=0);this.vLeft+this.radius>=window.innerWidth&&(this.vLeft=window.innerWidth-2*this.radius);0>this.vTop&&(this.vTop=0);this.vTop+this.radius>=window.innerHeight&&(this.vTop=window.innerHeight-2*this.radius);this.moveX=Math.floor(8*Math.random())-4;this.moveY=Math.floor(8*Math.random())-
+4;this.ball=document.createElement("div");this.ball.setAttribute("class","bouncingball");this.ball.setAttribute("onmouseover","divOnMouseOver(this)");this.ball.style.left=this.vLeft+"px";this.ball.style.top=this.vTop+"px";this.ball.style.backgroundColor=randomColor();this.ball.style.borderColor=this.ball.style.backgroundColor;this.ball.style.width=this.radius+"px";this.ball.style.height=this.radius+"px";this.ball.style.borderRadius=Math.floor(this.radius/2)+"px"}Ball.prototype.currentTurn=0;
+Ball.prototype.myTurn=function(){this.selected=!0;this.selectedTime=new Date;this.ball.style.borderColor="red";this.ball.style.borderWidth="3px";this.ball.style.borderStyle="dotted"};Ball.prototype.imNot=function(){this.selected=!1;this.ball.style.borderColor=this.ball.style.backgroundColor;this.ball.style.borderWidth="1px";this.ball.style.borderStyle="solid"};
+Ball.prototype.move=function(){this.vLeft+=this.moveX;this.vTop+=this.moveY;this.ball.style.left=this.vLeft+"px";this.ball.style.top=this.vTop+"px"};Ball.prototype.checkBoundary=function(){if(0>=this.vLeft||this.vLeft+this.radius>=window.innerWidth)this.moveX*=-1;if(0>=this.vTop||this.vTop+this.radius>=window.innerHeight)this.moveY*=-1};
+Ball.prototype.rePosition=function(){var a=!1;this.vLeft+this.radius>window.innerWidth&&(this.vLeft=window.innerWidth-this.radius-1,a=!0);this.vTop+this.radius>window.innerHeight&&(this.vTop=window.innerHeight-this.radius-1,a=!0);a&&(this.ball.style.left=this.vLeft+"px",this.ball.style.top=this.vTop+"px")};
+function moveBalls(){var a=new Date;1<balls.length&&balls[Ball.currentTurn].selected&&1500<=a-balls[Ball.currentTurn].selectedTime&&(missedBalls++,balls[Ball.currentTurn].imNot(),Ball.currentTurn>=balls.length-1?Ball.currentTurn=0:Ball.currentTurn++,balls[Ball.currentTurn].myTurn());for(var b in balls)balls[b].move(),balls[b].checkBoundary(),document.getElementById("timefinish").innerHTML=getTimeStamp()}
+function getTimeStamp(a){var b;if(0<arguments.length){if(1==a&&(timeChecked=b=timeStarted=new Date),2==a&&(b=timeFinished=new Date),3==a)return(timeFinished-timeStarted)/1E3}else b=new Date;return""+(addZero(b.getHours())+":"+addZero(b.getMinutes())+":"+addZero(b.getSeconds())+'.<span style="font-size:11pt; color:#444;">'+b.getMilliseconds()+"</span>")}function addZero(a){return 10>a?"0"+a:a}
+function startGame(){for(var a=1;15>=a;a++){var b=new Ball;document.body.appendChild(b.ball);balls.push(b)}timer=setInterval(moveBalls,25);document.getElementById("timestart").innerHTML=getTimeStamp(1);document.getElementById("ballsleft").innterHTML=balls.length;document.getElementById("timefinish").innerHTML="";document.getElementById("timeinterval").innerHTML="?";Ball.currentTurn=0;balls[Ball.currentTurn].myTurn();missedBalls=0;missed=[];intervals=[]}
+function reAlignCopyright(){var a=document.getElementById("copyright").style;a.top=window.innerHeight-20+"px";a.width=window.innerWidth-20+"px";for(var b in balls)balls[b].rePosition()}window.onload=function(){reAlignCopyright()};
+
+    </script>
+  </head>
+  <body onresize="reAlignCopyright();">
+  <table style="width:100%;"> <tr>
+  <td style="width: 100px; text-align: center;"><button id="control" style="font-size:12pt;" onclick='startGame();'>Start</button></td>
+  <td style="width:120px;">Balls Left: <b><span style="width:180px; color: blue;" id=ballsleft></span></b> </td>
+  <td style="width:140px;">Start:<b><span id=timestart></span></b></td>
+  <td style="width:140px;"> Finish:<b><span id=timefinish></span></b></td>
+  <td style="text-align:right;">Your speed:<b><span id=timeinterval style="color: red; font-size: 12pt;">?</span></b> seconds.</td>
+  </tr></table>
+
+  <div id='copyright' class='copyright'>
+  Copyright (c) 2016 by Pongsik, Ho.  컴퓨터정보과, 동의과학대학교
+  </div>
+
+  </body>
+</html>

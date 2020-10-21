@@ -1,0 +1,556 @@
+<!doctype html>
+<html>
+<!--
+- bounding ball의 크기를 짝수로만 설정하도록 함. (찌그러진 공 방지)
+- time stamp 기능 추가
+- start button 추가 
+- 게임 계속 가능 
+- copyright 정보 추가 및 resize 대응.
+- balls resize 대응
+- Ball methods are moved to prototype
+- 차례대로 지정되는 볼을 하나씩 없애야 한다.
+- 선택 볼이 잘 보일 수 있도록 볼의 칼라 범위를 조절함. (선택 테두리가 잘 보이도록 함.)
+- 1.5초 내에 없애지 못하면 선택할 볼이 변경됨.
+- 없애는 볼의 배경색이 화면의 배경색으로 설정됨. (볼의 제거도 확인하면서 게임의 흥미를 높임 ) 
+- 볼 제거 과정(볼 제거 간의 시간, 놓친 볼의 횟수 등)을 기록 
+- 볼 개수를 최대~최소 범위에서 입력할 수 있게 함. (범위를 넘어서면 강제로 조정하는 기능 )
+- 볼 제거 시, fadeOut 효과 적용 (ballsKilled 배열 활용)
+- pause, resume easter egg 추가.
+- 1/1000 -> 1/100 
+- 놓친 볼들의 순서가 다시 재생되지 않도록 함.
+- 윈도우 경계에서의 반사 정밀도 개선. (Ball.checkBoundary() 를 삭제하고 Balls.move()로 통합.)
+- ballCount 역진 방지 기능. (최근에 한 개수보다 같거나 많게만 설정가능.)
+- 게임 중 ball 추가 easter egg 추가. (역진 방지 유지)
+- 게임 종료 후, game report 표시.
+-->
+  <head>
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+    <style>
+      div.bouncingball {
+        border: 1px solid black;
+        position: absolute;
+        text-align: center;
+        box-shadow: 3px 3px 2px #888888;
+        z-index: 1;
+      }
+      div.button {
+        width: 150px;
+        height: 40px;
+        border: 2px solid gray;
+        position: center;
+        background-color: yellow;
+      }
+      div.copyright {
+        position: absolute;
+        text-align: right;
+        font-size: 9pt;
+        color: #999999;
+        height: 16px;
+        z-index: 2;
+      }
+      div.gameresult {
+        position: absolute;
+        left: 100px;
+        top: 100px;
+        width: 500px;
+        border: 1px solid gray;
+        box-shadow: 3px 3px 3px #555555;
+        border-radius: 10px;
+        font-size: 12pt;
+      }
+      .coltitle {
+        text-align: right;
+        width: 170px;
+        font-size: 15pt;
+      }
+      .colvalue {
+        text-align: left;
+        padding-left: 5px;
+        font-size: 15pt;
+      }
+    </style>
+
+    <script>
+      var ballsMin = 10;
+      var ballsMax = 100;
+      var ballCount = 10;
+      var balls = [];
+      var ballsKilled = []; // 제거된 볼 저장
+      var intervals = [];  // 볼 삭제 간격 기록 
+      var missed = [];  // 볼 제거 전 놓친 횟수 
+      var missedBalls = 0;
+      var timeStarted, timeFinished, timeInterval, timeChecked;
+      var timer;  // for timeInterval() handler
+      var windows = []; // window size
+      //------------------------------------------------------------------------------------
+      function windowStamp() {
+        var xy = [];
+        xy.push(window.innerWidth);
+        xy.push(window.innerHeight);
+        windows.push(xy);
+        console.log(xy);
+      }
+      //------------------------------------------------------------------------------------
+      var divOnMouseOver = function (t) {
+        var found = -1;
+        var timeKilled;
+        for(var j in balls)
+          if(balls[j].ball === t) {
+            found = j;
+            timeKilled = new Date();
+            break;
+          }
+        if(found >= 0 && balls[found].selected)  // <------ for find and kill game
+        {
+          intervals.push(timeKilled - timeChecked);
+          document.body.style.backgroundColor = balls[found].ball.style.backgroundColor;
+          var bk = balls.splice(found,1);
+          ballsKilled.unshift(bk);
+          timeChecked = new Date();
+          missed.push(missedBalls);
+          for(var i=1; i <= missedBalls; i++)
+            rotateBalls(0);
+          missedBalls = 0;
+        }
+        else
+          return;  // <---- for find and kill game.
+
+        // document.body.removeChild(t);
+        $(t).slideUp(400);
+        t = null;
+        document.getElementById('ballsleft').innerHTML = balls.length;
+        //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        // Game Over
+        //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        if(balls.length <= 0) {
+
+          document.getElementById('timefinish').innerHTML = getTimeStamp(2);
+          document.getElementById('timeinterval').innerHTML = getTimeStamp(3);
+          clearInterval(timer);
+          document.body.style.backgroundColor = 'white';  // 배경색 초기화.
+          document.getElementById('control').style.visibility = 'visible';
+          document.getElementById('control2').style.visibility = 'visible';
+          ballsMin = ballCount;
+          // for Game Report --------------------------- Start//
+          $('#numberofballs').text(ballCount);
+          $('#timetotal').text(timeInterval/1000);
+          $('#timeavr').text(avrOf(intervals)/1000);
+          $('#timemax').text(maxOf(intervals)/1000);
+          $('#timemin').text(minOf(intervals)/1000);
+          $('#missedballs').text(sumOf(missed));
+          $('#windowsize').html(reportWindowSize());
+          $('#gameresult').slideDown();
+          // for Game Report --------------------------- End//
+
+          for(var i in intervals) {
+            console.log('['+addZero(i)+']:'+intervals[i]+' (missed '+ missed[i] + ')');
+          }
+        }
+        else{
+          balls[0].myTurn();
+          Ball.currentTurn = 0;
+        }
+      }
+      //------------------------------------------------------------------------------------
+      function reportWindowSize() {
+        var length = windows.length;
+        if(length == 1)
+          return '<b>'+windows[0][0]+' x '+windows[0][1]+'</b> (not resized)';
+        return '<b>'+windows[length-1][0]+' x '+windows[length-1][1]+'</b> (final size)';
+      }
+      //------------------------------------------------------------------------------------
+      function maxOf(ar) {
+        switch(ar.length) {
+          case 0:
+            alert('Error of function [maxOf()]: Empty array!');
+            return null;
+          case 1:
+            return ar[0];
+          default:
+            var max = ar[0];
+            for(var i=1; i<ar.length; i++)
+              if(ar[i] > max)
+                max = ar[i];
+            return max;
+        }
+      }
+      //------------------------------------------------------------------------------------
+      function minOf(ar) {
+        switch(ar.length) {
+          case 0:
+            alert('Error of function [minOf()]: Empty array!');
+            return null;
+          case 1:
+            return ar[0];
+          default:
+            var min = ar[0];
+            for(var i=1; i<ar.length; i++)
+              if(ar[i] < min)
+                min = ar[i];
+            return min;
+        }
+      }
+      //------------------------------------------------------------------------------------
+      function avrOf(ar) {
+        switch(ar.length) {
+          case 0:
+            alert('Error of function [avrOf()]: Empty array!');
+            return null;
+          case 1:
+            return ar[0];
+          default:
+            var sum = 0;
+            for(var i=0; i<ar.length; i++)
+                sum += ar[i];
+            return Math.floor(sum/ar.length);
+        }
+      }
+      //------------------------------------------------------------------------------------
+      function sumOf(ar) {
+        switch(ar.length) {
+          case 0:
+            alert('Error of function [sumOf()]: Empty array!');
+            return null;
+          case 1:
+            return ar[0];
+          default:
+            var sum = 0;
+            for(var i=0; i<ar.length; i++)
+                sum += ar[i];
+            return sum;
+        }
+      }
+
+      //------------------------------------------------------------------------------------
+      var divOnMouseOut = function (t) {
+        //t.style.borderColor = t.style.backgroundColor;
+      }
+      //------------------------------------------------------------------------------------
+      function randomColor() {
+        var r = Math.floor(Math.random()*76)+175;
+        var g = Math.floor(Math.random()*76)+175;
+        var b = Math.floor(Math.random()*76)+175;
+        return 'rgb('+r+','+g+','+b+')';
+      }
+      //------------------------------------------------------------------------------------
+      function randomRadius(maxRadius, minRadius) {
+        if(arguments.length == 0)
+          maxRadius = 100;
+        if(arguments.legnth ==1) {
+          var r = Math.floor(Math.random()*maxRadius);
+          return (r%2 > 0) ? r+1 : r;
+        }
+        else {
+          r = Math.floor(Math.random()*maxRadius)+minRadius;
+          return (r%2 > 0) ? r+1 : r;
+        }
+        
+
+      }
+      //------------------------------------------------------------------------------------
+      function Ball() {
+        this.selected = false;
+        this.selectedTime = new Date();
+        this.radius = randomRadius(75,10);
+        this.vLeft = Math.floor(Math.random()*window.innerWidth);
+        this.vTop = Math.floor(Math.random()*window.innerHeight); 
+        this.vRight = this.vLeft + 2*this.radius - 1;
+        this.vBottom = this.vTop  + 2*this.radius - 1;
+        if((this.vRight) >= window.innerWidth){
+          this.vLeft = window.innerWidth - (2*this.radius)-1;
+          this.vRight = this.vLeft + 2*this.radius - 1;
+        }
+        if((this.vBottom) >= window.innerHeight){
+          this.vTop = window.innerHeight - (2*this.radius)-1;
+          this.vBottom = this.vTop  + 2*this.radius - 1;
+        }
+
+
+        this.moveX = Math.floor(Math.random()*8)-4;
+        this.moveX = (this.moveX == 0) ? 4 : this.moveX;
+        this.moveY = Math.floor(Math.random()*8)-4;
+        this.moveY = (this.moveY == 0) ? -4 : this.moveY;
+        this.ball = document.createElement('div');
+        this.ball.setAttribute('class', 'bouncingball');
+        this.ball.setAttribute('onmouseover','divOnMouseOver(this)');
+        //this.ball.setAttribute('onmouseup','divOnMouseOut(this)');
+        this.ball.style.left = this.vLeft + 'px';
+        this.ball.style.top = this.vTop + 'px';
+        this.ball.style.backgroundColor = randomColor();
+        this.ball.style.borderColor = this.ball.style.backgroundColor;
+        this.ball.style.width = 2*this.radius + 'px'
+        this.ball.style.height = 2*this.radius + 'px'
+        this.ball.style.borderRadius = Math.floor(this.radius)+'px';
+        // this.ball.style.visibility = 'hidden';
+        
+      }
+      //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      Ball.prototype.currentTurn = 0;
+      Ball.prototype.myTurn = function () {
+        this.selected = true;
+        this.selectedTime = new Date();
+        this.ball.style.borderColor = 'red';
+        this.ball.style.borderWidth = '3px';
+        this.ball.style.borderStyle = 'dotted';
+      }
+      Ball.prototype.imNot = function () {
+        this.selected = false;
+        this.ball.style.borderColor = this.ball.style.backgroundColor;
+        this.ball.style.borderWidth = '1px';
+        this.ball.style.borderStyle = 'solid';        
+      }
+      Ball.prototype.move = function () {
+        this.vLeft += this.moveX;
+        if(this.vLeft <= 0) {
+          this.vLeft = 0;
+          this.moveX *= -1; 
+        }
+        this.vTop += this.moveY;
+        if(this.vTop <= 0) {
+          this.vTop = 0;
+          this.moveY *= -1;
+        }
+
+        this.vRight = this.vLeft + 2*this.radius - 1;
+        this.vBottom = this.vTop  + 2*this.radius - 1;
+
+        if((this.vRight) >= window.innerWidth){
+          this.vLeft = window.innerWidth - (2*this.radius)-1;
+          this.vRight = this.vLeft + 2*this.radius - 1;
+          this.moveX *= -1;
+        }
+        if((this.vBottom) >= window.innerHeight){
+          this.vTop = window.innerHeight - (2*this.radius)-1;
+          this.vBottom = this.vTop  + 2*this.radius - 1;
+          this.moveY *= -1;
+        }
+
+        this.ball.style.left = this.vLeft + 'px';
+        this.ball.style.top = this.vTop + 'px';   
+      };
+      Ball.prototype.rePosition = function() {
+        var changed = false;
+        if((this.vLeft + this.radius) > window.innerWidth){
+          this.vLeft = window.innerWidth - this.radius - 1;
+          changed = true;
+        }
+        if((this.vTop + this.radius) > window.innerHeight){
+          this.vTop = window.innerHeight - this.radius - 1;
+          changed = true;
+        }
+        if(changed) {
+          this.ball.style.left = this.vLeft + 'px';
+          this.ball.style.top = this.vTop + 'px';   
+        }
+      }
+      //------------------------------------------------------------------------------------
+
+      function moveBalls() {
+        var timeNow = new Date;  // <-- for game 1.5 second
+        if((balls.length > 1) && balls[Ball.currentTurn].selected && ((timeNow-balls[Ball.currentTurn].selectedTime) >= 1500)) {
+          missedBalls++;
+          balls[Ball.currentTurn].imNot();
+          if(Ball.currentTurn >= (balls.length-1)) {
+            Ball.currentTurn = 0;
+          } else {
+            Ball.currentTurn++;            
+          }      
+          balls[Ball.currentTurn].myTurn();
+        }
+        for(var i in balls) {
+          balls[i].move();
+          document.getElementById('timefinish').innerHTML = getTimeStamp();
+        }
+      }
+      //------------------------------------------------------------------------------------
+      function getTimeStamp(mode) {
+        var d;
+        if(arguments.length > 0) {
+          if(mode == 1) {
+            timeStarted = new Date();
+            d = timeStarted;
+            timeChecked = timeStarted;
+          }
+          if(mode == 2) {
+            timeFinished = new Date();
+            d = timeFinished
+          }
+          if(mode == 3) {
+            timeInterval = timeFinished - timeStarted;
+            return (timeInterval/1000);
+          }
+        } else {
+          d = new Date();
+        }
+
+        var msg = '';
+        msg += addZero(d.getHours()) + ':' + addZero(d.getMinutes()) + ':' + addZero(d.getSeconds()) + '.<span style="font-size:11pt; color:#444;">' + addZero(Math.floor(d.getMilliseconds()/10)) + '</span>';
+        return msg;
+      }
+      //------------------------------------------------------------------------------------
+      function addZero(i) {
+         return (i < 10) ? "0" + i : i;
+      }//------------------------------------------------------------------------------------
+      function rotateBalls(dir) {
+         if(dir == 0) 
+          balls.push(balls.shift());
+         else
+          balls.unshift(balls.pop());
+      }
+      //------------------------------------------------------------------------------------
+      function startGame() {
+          ballCount = document.getElementById('ballcount').value * 1;
+          // ballCount = (ballCount <= ballsMin) ? ballsMin : ballCount;
+          // ballCount = (ballCount > ballsMax) ? ballsMax : ballCount;
+
+          $('#gameresult').slideUp();
+
+          for(var i=1; i<=ballCount; i++) {
+                var b = new Ball();
+                document.body.appendChild(b.ball);
+                $(b.ball).hide();
+                $(b.ball).slideDown(500);
+                balls.push(b);
+          }
+          ballsKilled = [];
+          timer = setInterval(moveBalls,25);
+          document.getElementById('timestart').innerHTML = getTimeStamp(1);
+          document.getElementById('ballsleft').innerHTML = balls.length;
+          document.getElementById('timefinish').innerHTML = '';
+          document.getElementById('timeinterval').innerHTML = '?';
+          document.getElementById('control').style.visibility = 'hidden';
+          document.getElementById('control2').style.visibility = 'hidden';
+          document.getElementById('ballcount').value = ballCount;
+          Ball.currentTurn = 0;
+          balls[Ball.currentTurn].myTurn();
+          missedBalls = 0;
+          missed = [];
+          intervals = [];
+          windows = [];
+          windowStamp();
+      }      
+      //------------------------------------------------------------------------------------
+      function addBall() {
+        var b = new Ball();
+        document.body.appendChild(b.ball);
+        $(b.ball).hide();
+        $(b.ball).slideDown(400);
+        balls.push(b);
+        ballCount++;
+        ballsMin = ballCount;
+        document.getElementById('ballsleft').innerHTML = balls.length;
+        document.getElementById('ballcount').value = ballCount;
+      }
+      //------------------------------------------------------------------------------------
+      function pauseGame() {
+        if(timer != null) {
+          clearInterval(timer);
+          timer = null;
+        } else
+          resumeGame();  
+      }
+      //------------------------------------------------------------------------------------
+      function resumeGame() {
+        if(timer == null) 
+          timer = setInterval(moveBalls, 25);
+        else
+          pauseGame();  
+      }
+      //------------------------------------------------------------------------------------
+      function correctBallsInput() {
+        var bci = document.getElementById('ballcount');
+        var bc = bci.value * 1;
+        if (bc <= ballsMin) 
+          bci.value = ballsMin;
+        else if (bc > ballsMax)
+          bci.value = ballsMax;
+      }
+      //------------------------------------------------------------------------------------
+      function reAlignCopyright() {
+        var dc = document.getElementById('copyright');
+        var dcs = dc.style;
+        dcs.top = (window.innerHeight - 20) + 'px';
+        dcs.width = (window.innerWidth - 20) + 'px';
+
+
+        for(var i in balls)
+          balls[i].rePosition();
+
+        windowStamp();
+        reAlignGameResult();
+      }
+      //------------------------------------------------------------------------------------
+      function reAlignGameResult() {
+        var dc = document.getElementById('gameresult');
+        var dcs = dc.style;
+        dcs.left = Math.floor((window.innerWidth - 500) / 2) + 'px';
+        dcs.top = '150 px';
+      }
+      //------------------------------------------------------------------------------------
+      window.onload = function() {
+        reAlignCopyright();
+        document.getElementById('ballcount').value = ballCount; 
+        $('#gameresult').hide();
+      }
+    </script>
+  </head>
+  <body onresize="reAlignCopyright();">
+      <!-- ====================================================================================================== -->
+      <table style="width:100%;"> <tr>
+      <td style="width: 160px; text-align: left;"><button id="control" style="font-size:12pt;" onclick='startGame();'>Start</button> <span id='control2'>with 
+          <input oninput='correctBallsInput();' type='text' id='ballcount' style="font-size: 12pt; text-align: right;" size='3'></span></td>
+      <td style="width:120px;"><span onclick="addBall();">Balls</span>: <b><span style="width:180px; color: blue;" id=ballsleft></span></b> </td>
+      <td style="width:140px;">Start:<b><span id=timestart onclick = "resumeGame();"></span></b></td>
+      <td style="width:140px;"> Finish:<b><span id=timefinish onclick="pauseGame();"></span></b></td>
+      <td style="text-align:right;">Your speed:<b><span id=timeinterval style="color: red; font-size: 12pt;">?</span></b> seconds.</td>
+      </tr></table>
+
+      <!-- ====================================================================================================== -->
+      <div id='copyright' class='copyright'>Copyright (c) 2016 by Pongsik, Ho.  컴퓨터정보과, 동의과학대학교  </div>
+      <!-- ====================================================================================================== -->
+      <div class='gameresult' id='gameresult' style="text-align: center; width: 500px; background-color: MistyRose;">
+          <table width=100%>
+            <tr><td style="border-bottom-style: solid; border-bottom-width: 2px; border-bottom-color: gray;">
+                <h1 style="color: MediumVioletRed; font-family: 'Arial'; font-style: 'bold'; text-shadow: 2px 2px 2px #AAAAAA; margin-bottom: 0px;" >Game Report</h1>
+                <p style="font-family: Arial; font-size:7pt;"> version: [bouncing_q].2016.10.14.</p>
+            </td></tr>
+            <tr><td style="background-color: LemonChiffon;">
+                <table style="width:100%; border-style: solid; border-color: #AAAAAA; border-width: 0px; position: relative; margin: 5%;">
+                  <tr>
+                    <td class=coltitle># of game balls:</td>
+                    <td class=colvalue><b><span id='numberofballs'>35</span></b></td>
+                  </tr>
+                  <tr>
+                    <td class=coltitle># of missed balls:</td>
+                    <td class=colvalue><b><span id='missedballs'>1:00.00</span></b></td>
+                  </tr>
+                  <tr>
+                    <td class=coltitle>Window size:</td>
+                    <td class=colvalue><span id='windowsize'>35</span></td>
+                  </tr>
+                  <tr>
+                    <td class=coltitle>Total game time:</td>
+                    <td class=colvalue><b><span id='timetotal'>1:00.00</span></b> secs.</td>
+                  </tr>
+                  <tr>
+                    <td class=coltitle>Average interval:</td>
+                    <td class=colvalue><b><span id='timeavr'>1:00.00</span></b> secs.</td>
+                  </tr>
+                  <tr>
+                    <td class=coltitle>Maximum interval:</td>
+                    <td class=colvalue><b><span id='timemax'>1:00.00</span></b> secs.</td>
+                  </tr>
+                  <tr>
+                    <td class=coltitle>Mininum interval:</td>
+                    <td class=colvalue><b><span id='timemin'>1:00.00</span></b> secs.</td>
+                  </tr>
+                </table>
+            </td></tr>
+            <tr><td style="border-top-style: solid; border-top-width: 2px; border-top-color: gray;">
+                <p>Copyright (c) 2016 by Pongsik, Ho.  DIT</p>
+            </td></tr>
+          </table>
+      </div>
+      <!-- ====================================================================================================== -->
+  </body>
+</html>

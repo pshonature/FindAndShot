@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+<!--
+버전 1.0
+-->
+  <head>
+    <style>
+      div.bouncingball {
+        border: 1px solid blue;
+        position: absolute;
+        background-color: blue;
+        box-shadow: 3px 3px 2px #888888;
+        width: 20px;
+        height: 20px;
+        border-radius: 11px;
+      }
+    </style>
+    <script>
+      var balls = [];
+      //------------------------------------------------------------------------------------
+      function makeBall() {
+        var vLeft = Math.floor(Math.random()*window.innerWidth);
+        var vTop = Math.floor(Math.random()*window.innerHeight); 
+        var ball = document.createElement('div');
+        ball.setAttribute('class', 'bouncingball');
+        ball.style.left = vLeft + 'px';
+        ball.style.top = vTop + 'px';
+        document.body.appendChild(ball);    // -> 반드시 body loading 후에 해야 함. ~> window.onload ...
+        return ball;
+      }
+      window.onload = function() {
+        for(var i=1; i<=100; i++) 
+              balls.push(makeBall());
+      }
+      //------------------------------------------------------------------------------------
+    </script>
+  </head>
+  <body>
+  </body>
+</html>
